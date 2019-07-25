@@ -1,0 +1,19 @@
+{
+  "train_x_path": "mr_dataset/train.txt.tok",
+  "train_y_path": "mr_dataset/train.cat",
+  "test_x_path": "mr_dataset/test.txt.tok",
+  "test_y_path": "mr_dataset/test.cat",
+  "cuda": false,
+  "rare_word_threshold": 3,
+  "model_path": "out/test123_small",
+  "batch_size": 32,
+  "learning_rate.remove": 0.001,
+  "num_epochs": 10,
+  "ngram_sizes": [2,3,4],
+  "embedding_dim": 6,
+  "num_filters": 7,
+  "class_to_str": {
+    "1": "pos",
+    "0": "neg"
+  }
+}

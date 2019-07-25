@@ -1,0 +1,6 @@
+{
+  "cuda": false,
+  "model_path": "out/test123_small",
+  "minimum_purity": 0.1,
+  "cluster": true
+}
