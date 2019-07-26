@@ -1,5 +1,7 @@
 # Understanding Convolutional Neural Networks for Text Classification - PyTorch Implementation
+
 Alon Jacovi, Oren Sar Shalom, Yoav Goldberg
+
 Link: https://aclweb.org/anthology/papers/W/W18/W18-5408/
 
 Contact: Alon Jacovi (alonjacovi@gmail.com)
