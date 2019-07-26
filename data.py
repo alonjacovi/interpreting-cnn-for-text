@@ -59,7 +59,9 @@ def load_data(config, word_to_idx=None):
     # tokenize data
     data["train_x"] = [[data["word_to_idx"].get(w, data["word_to_idx"]["@@UNK@@"]) for w in s] for s in data["train_x"]]
     data["valid_x"] = [[data["word_to_idx"].get(w, data["word_to_idx"]["@@UNK@@"]) for w in s] for s in data["valid_x"]]
-    data["pred_x"] = [[data["word_to_idx"].get(w, data["word_to_idx"]["@@UNK@@"]) for w in s] for s in data["pred_x"]]
+
+    if "pred_x_path" in config and "pred_y_path" in config:
+        data["pred_x"] = [[data["word_to_idx"].get(w, data["word_to_idx"]["@@UNK@@"]) for w in s] for s in data["pred_x"]]
 
     return data
 
