@@ -1,5 +1,5 @@
 import json
-from load_data import load_data
+from data import load_data, get_epoch
 import model
 import torch
 from torch import nn
@@ -9,32 +9,6 @@ from random import shuffle
 import logging
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 logger.setLevel(logging.INFO)
-
-
-def get_epoch(x, y, batch_size, is_train=True, padding_idx=0):
-    """
-    Very simple random batching
-
-    Returns batches of: sequences (padded to longest in batch), labels, and lengths
-    """
-
-    if is_train:
-        dataset = list(zip(x, y))
-        shuffle(dataset)
-        x, y = zip(*dataset)
-
-    batches_x = [x[i:i + batch_size] for i in range(0, len(x), batch_size)]
-    batches_y = [y[i:i + batch_size] for i in range(0, len(y), batch_size)]
-
-    lengths_x = []
-    for i in range(len(batches_x)):
-        batch = batches_x[i]
-        lengths_x.append([len(s) for s in batch])
-        max_s = max([len(s) for s in batch])
-        batch = [s + [padding_idx] * (max_s - len(s)) for s in batch]
-        batches_x[i] = batch
-
-    return batches_x, batches_y, lengths_x
 
 
 def train_epoch(model, data, config):
@@ -75,7 +49,7 @@ def train_epoch(model, data, config):
 def eval_epoch(model, data, config):
     model.eval()
     n_iter = 0
-    epoch_x, epoch_y, lengths_x = get_epoch(data["test_x"], data["test_y"], config["batch_size"], is_train=False)
+    epoch_x, epoch_y, lengths_x = get_epoch(data["valid_x"], data["valid_y"], config["batch_size"], is_train=False)
     epoch_loss = 0
     corrects = 0
     criterion = nn.CrossEntropyLoss()
@@ -102,7 +76,7 @@ def eval_epoch(model, data, config):
         #     model.train()
         del batch_x, batch_y, pred, loss
 
-    return epoch_loss / len(data["test_y"]), corrects / len(data["test_y"]) * 100
+    return epoch_loss / len(data["valid_y"]), corrects / len(data["valid_y"]) * 100
 
 
 if __name__ == '__main__':

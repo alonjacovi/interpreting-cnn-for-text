@@ -1,28 +1,7 @@
 from random import shuffle
 from nltk import FreqDist
 
-"""
-My code should abstract the following places so others can use it freely:
-APIS:
-+a - tokenized data from files + (optional) mapping
-+b - trained model from tokenized data + mapping + (optional) non-contextual
-c - model activations from model weights (inc simple embeddings) + tokenized data + mapping
-d - interpretation from model activations + tokenized data + mapping
 
-If you want to use pre-trained (non-contextual) embeddings, for example:
-1. Supply your own word_to_idx mapping to a that maps str tokens to indices based on your embeddings matrix
-And overwrite the embedding matrix in b with your embeddings with my supplied function
-or
-2. Supply your own model weights and only use c, d
-
-If you want to use contextual embeddings (BERT), for example, you can either:
-1. Add word pieces to a, bert to b, c (requires understanding and changing my code)
-or
-2. Supply your own model activations and only use d
-"""
-
-
-# this is (a)
 def load_data(config, word_to_idx=None):
     """
     If you want to use embeddings, supply your own word_to_idx dict.
@@ -38,14 +17,21 @@ def load_data(config, word_to_idx=None):
     with open(config["train_x_path"], "r", encoding="UTF-8") as f:
         data["train_x"] = [x.strip().split(u' ') for x in f]
 
-    with open(config["test_x_path"], "r", encoding="UTF-8") as f:
-        data["test_x"] = [x.strip().split(u' ') for x in f]
-
     with open(config["train_y_path"], "r") as f:
         data["train_y"] = [int(x) - 1 for x in f]
 
-    with open(config["test_y_path"], "r") as f:
-        data["test_y"] = [int(x) - 1 for x in f]
+    with open(config["valid_x_path"], "r", encoding="UTF-8") as f:
+        data["valid_x"] = [x.strip().split(u' ') for x in f]
+
+    with open(config["valid_y_path"], "r") as f:
+        data["valid_y"] = [int(x) - 1 for x in f]
+
+    if "pred_x_path" in config and "pred_y_path" in config:
+        with open(config["pred_x_path"], "r", encoding="UTF-8") as f:
+            data["pred_x"] = [x.strip().split(u' ') for x in f]
+
+        with open(config["pred_y_path"], "r") as f:
+            data["pred_y"] = [int(x) - 1 for x in f]
 
     if word_to_idx is None:
         all_words = [word for seq in data["train_x"] for word in seq]  # no test set here
@@ -72,7 +58,38 @@ def load_data(config, word_to_idx=None):
 
     # tokenize data
     data["train_x"] = [[data["word_to_idx"].get(w, data["word_to_idx"]["@@UNK@@"]) for w in s] for s in data["train_x"]]
-    data["test_x"] = [[data["word_to_idx"].get(w, data["word_to_idx"]["@@UNK@@"]) for w in s] for s in data["test_x"]]
+    data["valid_x"] = [[data["word_to_idx"].get(w, data["word_to_idx"]["@@UNK@@"]) for w in s] for s in data["valid_x"]]
+    data["pred_x"] = [[data["word_to_idx"].get(w, data["word_to_idx"]["@@UNK@@"]) for w in s] for s in data["pred_x"]]
 
     return data
+
+
+def get_epoch(x, y, batch_size, is_train=True, padding_idx=0, num_examples=None):
+    """
+    Very simple random batching
+
+    Returns batches of: sequences (padded to longest in batch), labels, and lengths
+    """
+    assert len(x) == len(y)
+
+    if is_train:
+        dataset = list(zip(x, y))
+        shuffle(dataset)
+        x, y = zip(*dataset)
+
+    if num_examples is None:
+        num_examples = len(x)
+
+    batches_x = [x[i:i + batch_size] for i in range(0, num_examples, batch_size)]
+    batches_y = [y[i:i + batch_size] for i in range(0, num_examples, batch_size)]
+
+    lengths_x = []
+    for i in range(len(batches_x)):
+        batch = batches_x[i]
+        lengths_x.append([len(s) for s in batch])
+        max_s = max([len(s) for s in batch])
+        batch = [s + [padding_idx] * (max_s - len(s)) for s in batch]
+        batches_x[i] = batch
+
+    return batches_x, batches_y, lengths_x
 
