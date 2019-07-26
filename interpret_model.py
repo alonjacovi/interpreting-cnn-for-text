@@ -80,7 +80,12 @@ def prettify_prediction_interpretation(interpretation_info, prediction_interpret
 
     def mark_span(sentence, span_start, span_end, color):
         mark = f'<span style="background-color: {color}">@</span>'
-        marked_ngram = [mark + token for token in sentence[span_start:span_end] if mark not in token]
+        marked_ngram = []
+        for token in sentence[span_start:span_end]:
+            if mark in token:
+                marked_ngram.append(token)
+            else:
+                marked_ngram.append(mark + token)
         return sentence[:span_start] + marked_ngram + sentence[span_end:]
 
     colors = ["#FFFF00", "#6698FF", "#E56717", "#00FF7F", "#FFA07A", "#FF8C00"] # add more colors here
@@ -373,7 +378,6 @@ def model_interpretation_1(model, data, interpretation_info, config):
                         arg_max.append(a_val)
                         if len(max_val) == amount:
                             break
-                # max_val, arg_max = mm, aa
 
                 min_val, arg_min = [], []
                 for a_val in arg_sort:
@@ -383,7 +387,6 @@ def model_interpretation_1(model, data, interpretation_info, config):
                         arg_min.append(a_val)
                         if len(min_val) == amount:
                             break
-                # min_val, arg_min = min_val, arg_min
 
                 for i in range(amount):
                     if len(arg_max) < i + 1:
@@ -592,8 +595,8 @@ def model_interpretation_3_clustering(model, interpretation_info, thresholds, co
 
         t = thresholds["thresholds_x"][fix]
 
-        if t < 20:
-            print("Skipping clustering")
+        if t < 100:
+            print("Skipping clustering due to too little ngrams that passed the threshold.")
             print("### Too little samples passed the threshold ({}). Skipping clustering".format(t), file=f_out)
             continue
 
