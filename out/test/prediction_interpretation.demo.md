@@ -1,4 +1,6 @@
 # Prediction info
+## Note: Please view with a color markdown viewer! The "@" signs are supposed to be colored according to the filter's identity class.
+
 ## Original input: 
 ``` a reality - @@UNK@@ @@UNK@@ . ``` 
 
