@@ -1,9 +1,9 @@
 {
   "cuda": false,
-  "model_path": "/home/nlp/jacovia/nlp_clust/out/test123_small",
-  "pred_x_path": "/home/nlp/jacovia/nlp_clust/mr_dataset/valid.txt.tok",
-  "pred_y_path": "/home/nlp/jacovia/nlp_clust/mr_dataset/valid.cat",
+  "model_path": "out/test_run",
+  "pred_x_path": "mr_dataset/valid.txt.tok",
+  "pred_y_path": "mr_dataset/valid.cat",
   "minimum_purity": 0.5,
-  "top_k_in_logs": 45,
-  "cluster": false
+  "top_k_in_logs": 100,
+  "cluster": true
 }
