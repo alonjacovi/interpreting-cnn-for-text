@@ -3,9 +3,9 @@ from data import load_data, get_epoch
 import model
 import torch
 from torch import nn
-import torch.nn.functional as F
 import os
 from random import shuffle
+import argparse
 import logging
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 logger.setLevel(logging.INFO)
@@ -80,14 +80,16 @@ def eval_epoch(model, data, config):
 
 
 if __name__ == '__main__':
-    with open('/home/nlp/jacovia/nlp_clust/rewrite/config.json') as fp:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("-c", "--config", type=str, required=True)
+    args = parser.parse_args()
+
+    with open(args.config) as fp:
         config = json.load(fp)
 
     data = load_data(config=config)
 
     print(config)
-    # print(len(data["vocab"]))
-    # logger.info("Info...")
 
     model = model.CnnClassifier(ngram_sizes=config["ngram_sizes"], embedding_dim=config["embedding_dim"],
                                 num_filters=config["num_filters"], padding_idx=data["word_to_idx"]["@@PAD@@"],
@@ -133,8 +135,4 @@ if __name__ == '__main__':
 
     with open(config["model_path"] + "/metrics.json", "w") as fp:
         json.dump(metrics, fp)
-
-    # torch.save(model, "./models/" + params["model_name"] + "/model")
-    # save_obj(params, "params")
-
 

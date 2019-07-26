@@ -1,40 +1,25 @@
-# change model forward to output dict with activations
-
-# argparse model folder
-# load model
-# get activations (evaluation on model with train? dev?) - analyze()
-# model interpretation - filter clusters + thresholds - clusters()
-# argparse data path
-# data interpretation - bottom of script i think
-
 import json
 from data import load_data, get_epoch
-import model
 import torch
 import math
 from torch import nn
-import torch.nn.functional as F
 import os
 import numpy as np
-from random import shuffle
-import logging
+import argparse
 
 import matplotlib
 matplotlib.use('agg')
-# matplotlib.rcParams.update({'font.size': 18})
 import matplotlib.pyplot as plt
 from itertools import cycle
 from mpl_toolkits.mplot3d import Axes3D
 from collections import Counter
 from sklearn.cluster import MeanShift, estimate_bandwidth, DBSCAN
-# import pickle
-# import hdbscan
-
-logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
-logger.setLevel(logging.INFO)
 
 
 def eval_epoch_with_thresholds(model, data, config, thresholds):
+    """
+    Evaluate the thresholded model on the validation set
+    """
     model.eval()
     n_iter = 0
     epoch_x, epoch_y, lengths_x = get_epoch(data["valid_x"], data["valid_y"], config["batch_size"], is_train=False)
@@ -54,7 +39,6 @@ def eval_epoch_with_thresholds(model, data, config, thresholds):
         if config["cuda"]:
             batch_x, batch_y, lengths_x = batch_x.cuda(), batch_y.cuda(), lengths_x.cuda()
 
-        # optimizer.zero_grad()
         pred = model(batch_x, thresh)['logits']
         loss = criterion(pred, batch_y)
         n_iter += 1
@@ -64,22 +48,42 @@ def eval_epoch_with_thresholds(model, data, config, thresholds):
         corrects += batch_corrects
 
         # if n_iter % 200 == 0:
-        #     eval()
-        #     model.train()
+        #     print(n_iter)
         del batch_x, batch_y, pred, loss
 
     return epoch_loss / len(data["valid_y"]), corrects / len(data["valid_y"]) * 100
 
 
 def prettify_prediction_interpretation(interpretation_info, prediction_interpretation, config):
+    """
+    Convert the prediction interpretation to a pretty markdown string.
+    The text coloring only supports up to 6 colors, i.e. up to 6 classes of labels. If you want more, it's easy
+    to add.
+
+    Format per instance:
+    * original text
+    * marked text: each token is preceded by a colored @ with a color corresponding to the class of the filter
+      that "chose" an ngram containing this token.
+    * a table of all the prediction data:
+      filter name | passes | ngram | activation | slots
+
+      - filter name format: w{ngram size}.f{filter index} ex. w3.f4 = filter number
+        4 among the filters processing ngrams of size 3
+      - passes: whether the ngram passes the threshold of this filter
+      - ngram: ngram string
+      - activation: the final activation of the filter on this ngram. note that this number does NOT equal the sum of
+        the slot activations, because it includes the filter bias weight and is after the ReLU layer (non-negative)
+      - slots: the slot activation vector, i.e. the token-level activations gathered from breaking the filter-ngram
+        dot-product into k dot-products (for ngram of length k)
+    """
     output_str = "# Prediction info"
 
     def mark_span(sentence, span_start, span_end, color):
         mark = f'<span style="background-color: {color}">@</span>'
-        marked_ngram = [mark + token for token in sentence[span_start:span_end]]
+        marked_ngram = [mark + token for token in sentence[span_start:span_end] if mark not in token]
         return sentence[:span_start] + marked_ngram + sentence[span_end:]
 
-    colors = ["#FFFF00", "#6698FF", "#E56717", "#00FF7F", "#FFA07A", "#FF8C00"]
+    colors = ["#FFFF00", "#6698FF", "#E56717", "#00FF7F", "#FFA07A", "#FF8C00"] # add more colors here
     class_to_color = {}
     for cl, color in zip(list(config["class_to_str"]), colors):
         class_to_color[cl] = color
@@ -111,9 +115,9 @@ def prettify_prediction_interpretation(interpretation_info, prediction_interpret
                      str(["{0:.2f}".format(i) for i in pinfo[fname]["slot_activations"]])]) + "\n"
                 table += l
 
-        header = "### Original input: \n"
+        header = "## Original input: \n"
         header += "``` " + " ".join(pinfo["sentence"]) + " ``` \n\n"
-        header += "### Marked input: \n"
+        header += "## Marked input: \n"
         header += "<pre>" + " ".join(sen) + "</pre> \n\n"
         header += "Gold: " + pinfo["gold_str"] + ", Prediction: " + pinfo["prediction_str"] + "\n\n"
 
@@ -123,10 +127,19 @@ def prettify_prediction_interpretation(interpretation_info, prediction_interpret
 
 
 def interpret_predictions(data, model, config):
+    """
+    Get a list of prediction interpretations. Each instance in the list contains:
+    * The input sentence
+    * The gold label
+    * The predicted label
+    * For each filter:
+      - The chosen ngram (by max-pooling)
+      - The ngram's activation at the max-pooling layer (AFTER adding the filter bias + AFTER a ReLU layer)
+      - The slot activation vector for the ngram
+    """
     model.eval()
     n_iter = 0
-    epoch_x, epoch_y, lengths_x = get_epoch(data["pred_x"], data["pred_y"], 1,
-                                            is_train=False)
+    epoch_x, epoch_y, lengths_x = get_epoch(data["pred_x"], data["pred_y"], 1, is_train=False)
 
     prediction_info = []
 
@@ -151,19 +164,16 @@ def interpret_predictions(data, model, config):
         activations_filters_pooled = out['activations_filters_pooled']  # pooled
         pooled = activations_filters_pooled
         logits = out['logits']
-        # pred = logits
 
         indexed_seq = [int(x) for x in batch_x[0]]
         str_seq = [data["idx_to_word"][w] for w in indexed_seq]
-        real_seq = str_seq
 
         prediction = int(logits.squeeze().max(0)[1].item())
         prediction_str = config['class_to_str'][str(prediction)]
         gold = int(batch_y)
         gold_str = config['class_to_str'][str(gold)]
 
-        # if save_predictions:
-        pinfo["sentence"] = real_seq
+        pinfo["sentence"] = str_seq
         pinfo["gold"] = gold
         pinfo["gold_str"] = gold_str
         pinfo["prediction"] = prediction
@@ -173,19 +183,16 @@ def interpret_predictions(data, model, config):
         pooled_vals = [[float(x) for x in p.squeeze()] for p in pooled]
         filters = model.get_filters()
 
-        max_w_size = max(params["ngram_sizes"])
-        for w_size_ix, w_size in enumerate(params["ngram_sizes"]):
-            seq = ['@@PAD@@'] * (max_w_size - 1) + real_seq + ['@@PAD@@'] * (max_w_size - 1)
+        max_ngram_len = max(params["ngram_sizes"])
+        for ngram_len_idx, ngram_len in enumerate(params["ngram_sizes"]):
+            seq = ['@@PAD@@'] * (max_ngram_len - 1) + str_seq + ['@@PAD@@'] * (max_ngram_len - 1)
+            indexed_seq_padded = [data['word_to_idx']['@@PAD@@']] * (max_ngram_len - 1) + indexed_seq \
+                                 + [data['word_to_idx']['@@PAD@@']] * (max_ngram_len - 1)
 
-            indexed_seq_padded = [data['word_to_idx']['@@PAD@@']] * (max_w_size - 1) + indexed_seq \
-                                 + [data['word_to_idx']['@@PAD@@']] * (max_w_size - 1)
+            for jx, ngram_ix in enumerate(ngram_indices[ngram_len_idx]):
+                indexed_ngram = indexed_seq_padded[ngram_ix:ngram_ix + ngram_len]
 
-            for jx, ngram_ix in enumerate(ngram_indices[w_size_ix]):
-
-                # ngram_str = (' '.join(seq[ngram_ix:ngram_ix + w_size])).strip()
-                indexed_ngram = indexed_seq_padded[ngram_ix:ngram_ix + w_size]
-
-                f, b = filters[w_size_ix]
+                f, b = filters[ngram_len_idx]
                 windows = [f[jx][k:k + params["embedding_dim"]] for k in range(0, f.size()[1], params["embedding_dim"])]
                 # bias = b[jx]
                 E = model.get_embeddings()
@@ -193,15 +200,14 @@ def interpret_predictions(data, model, config):
 
                 word_values = [float(torch.dot(a, b)) for a, b in zip(windows, ngram_embeddings)]
 
-                fname = "w" + str(w_size) + ".f" + str(jx)
+                fname = "w" + str(ngram_len) + ".f" + str(jx)
 
                 if fname not in pinfo:
                     pinfo[fname] = {}
-                # pinfo[fname]["chosen_ngram_str"] = ngram_str
-                pinfo[fname]["chosen_ngram_span"] = [ngram_ix, ngram_ix + w_size]
-                pinfo[fname]["chosen_ngram"] = seq[ngram_ix:ngram_ix + w_size]
+                pinfo[fname]["chosen_ngram_span"] = [ngram_ix, ngram_ix + ngram_len]
+                pinfo[fname]["chosen_ngram"] = seq[ngram_ix:ngram_ix + ngram_len]
                 pinfo[fname]["slot_activations"] = word_values
-                pinfo[fname]["activation"] = pooled_vals[w_size_ix][jx]  # TODO cast to python/numpy from torch?
+                pinfo[fname]["activation"] = pooled_vals[ngram_len_idx][jx]
 
         prediction_info.append(pinfo)
 
@@ -213,28 +219,29 @@ def interpret_predictions(data, model, config):
 
 
 def get_activations(data, model, config, sample_size=None):
+    """
+    This function goes over the data, one by one (batch size = 1), getting the max-pooled ngrams/activations,
+    slot activations, and organizes them into a dict object for the "model interpretation" functions for the purpose
+    of capturing the semantic meaning of each filter and calculating thresholds.
+    """
+
     model.eval()
     n_iter = 0
     epoch_x, epoch_y, lengths_x = get_epoch(data["train_x"], data["train_y"], 1,
                                             is_train=False, num_examples=sample_size)
 
     interpretation_info = {
-        "filter_word_sum": {},
-        "filter_word_count": {},
-        "sorted_word_values": {},
-        "sorted_word_sums": {},
-        "sorted_word_ngrams": {},
-        "sorted_word_pred_class": {}
-        # "prediction_info": []
+        "slot_activations": {},
+        "chosen_ngrams_by_filter": {},
+        "predicted_class": {}
     }
 
     for ngram_size in config["ngram_sizes"]:
         for filter_ix in range(config["num_filters"]):
             fname = "w" + str(ngram_size) + ".f" + str(filter_ix)
-            interpretation_info["sorted_word_values"][fname] = []
-            interpretation_info["sorted_word_sums"][fname] = []
-            interpretation_info["sorted_word_ngrams"][fname] = []
-            interpretation_info["sorted_word_pred_class"][fname] = []
+            interpretation_info["slot_activations"][fname] = []
+            interpretation_info["chosen_ngrams_by_filter"][fname] = []
+            interpretation_info["predicted_class"][fname] = []
 
     for batch_x, batch_y, length_x in zip(epoch_x, epoch_y, lengths_x):
         batch_x = torch.LongTensor(batch_x)
@@ -244,69 +251,39 @@ def get_activations(data, model, config, sample_size=None):
         if config["cuda"]:
             batch_x, batch_y, lengths_x = batch_x.cuda(), batch_y.cuda(), lengths_x.cuda()
 
-        # optimizer.zero_grad()
         out = model(batch_x)
 
-        # pinfo = {}
-
-        params = config
-
-        activations_filters = out['activations_filters']  # features
-        # features = activations_filters
+        # activations_filters = out['activations_filters']
         ngram_indices = out['ngram_indices']
-        activations_filters_pooled = out['activations_filters_pooled']  # pooled
-        pooled = activations_filters_pooled
+        # activations_filters_pooled = out['activations_filters_pooled']
         logits = out['logits']
-        # pred = logits
 
         indexed_seq = [int(x) for x in batch_x[0]]
         str_seq = [data["idx_to_word"][w] for w in indexed_seq]
-        real_seq = str_seq
 
         prediction = int(logits.squeeze().max(0)[1].item())
-        # prediction_str = config['class_to_str'][str(prediction)]
-        # gold = int(batch_y)
-        # gold_str = config['class_to_str'][str(gold)]
-
-        # if save_predictions:
-        # pinfo["sentence"] = real_seq
-        # pinfo["gold"] = gold
-        # pinfo["gold_str"] = gold_str
-        # pinfo["prediction"] = prediction
-        # pinfo["prediction_str"] = prediction_str
 
         ngram_indices = [[int(x) for x in indices.squeeze()] for indices in ngram_indices]
-        pooled_vals = [[float(x) for x in p.squeeze()] for p in pooled]
         filters = model.get_filters()
 
-        max_w_size = max(params["ngram_sizes"])
-        for w_size_ix, w_size in enumerate(params["ngram_sizes"]):
-            if w_size not in interpretation_info["filter_word_sum"]:
-                interpretation_info["filter_word_sum"][w_size] = {}
-                interpretation_info["filter_word_count"][w_size] = {}
-                # filter_word_pred_class[w_size] = {}
-
-            seq = ['@@PAD@@'] * (max_w_size - 1) + real_seq + ['@@PAD@@'] * (max_w_size - 1)
-
+        max_w_size = max(config["ngram_sizes"])
+        for w_size_ix, w_size in enumerate(config["ngram_sizes"]):
+            seq = ['@@PAD@@'] * (max_w_size - 1) + str_seq + ['@@PAD@@'] * (max_w_size - 1)
             indexed_seq_padded = [data['word_to_idx']['@@PAD@@']] * (max_w_size - 1) + indexed_seq \
                                  + [data['word_to_idx']['@@PAD@@']] * (max_w_size - 1)
 
             for jx, ngram_ix in enumerate(ngram_indices[w_size_ix]):
-                if jx not in interpretation_info["filter_word_sum"][w_size]:
-                    interpretation_info["filter_word_sum"][w_size][jx] = {k: 0.0 for k in range(w_size)}
-                    interpretation_info["filter_word_count"][w_size][jx] = {k: 0 for k in range(w_size)}
-
-                # ngram_str = (' '.join(seq[ngram_ix:ngram_ix + w_size])).strip()
                 indexed_ngram = indexed_seq_padded[ngram_ix:ngram_ix + w_size]
 
                 f, b = filters[w_size_ix]
-                windows = [f[jx][k:k + params["embedding_dim"]] for k in range(0, f.size()[1], params["embedding_dim"])]
+                windows = [f[jx][k:k + config["embedding_dim"]] for k in range(0, f.size()[1], config["embedding_dim"])]
                 # bias = b[jx]
                 E = model.get_embeddings()
                 ngram_embeddings = [E[k] for k in indexed_ngram]
 
                 assert len(windows) == len(ngram_embeddings)
-                word_values = [float(torch.dot(a, b)) for a, b in zip(windows, ngram_embeddings)]
+                slot_acts = [float(torch.dot(a, b)) for a, b in zip(windows, ngram_embeddings)]
+                slot_acts = {str(vx): v for vx, v in enumerate(slot_acts)}
 
                 # Uncomment to verify that this code is correct
                 # i.e., the sum of slot activations + filter bias = pooled activation from model
@@ -314,42 +291,25 @@ def get_activations(data, model, config, sample_size=None):
                 # assert math.isclose(max(sum(word_values) + float(b[jx].item()), 0), pooled_vals[w_size_ix][jx],
                 #                     rel_tol=1e-05, abs_tol=1e-05):
 
-                for word_value_ix, word_value in enumerate(word_values):
-                    interpretation_info["filter_word_sum"][w_size][jx][word_value_ix] += word_value
-                    interpretation_info["filter_word_count"][w_size][jx][word_value_ix] += 1
-
-                word_values_tbdict = {str(vx): v for vx, v in enumerate(word_values)}
-
                 fname = "w" + str(w_size) + ".f" + str(jx)
 
-                interpretation_info["sorted_word_values"][fname].append(word_values_tbdict)
-                interpretation_info["sorted_word_ngrams"][fname].append(seq[ngram_ix:ngram_ix + w_size])
-                interpretation_info["sorted_word_pred_class"][fname].append(prediction)
-                # sorted_word_sums[fname].append(pooled_vals[w_size_ix][jx])
-
-                # if fname not in pinfo:
-                #     pinfo[fname] = {}
-                # pinfo[fname]["chosen_ngram"] = seq[ngram_ix:ngram_ix + w_size]
-                # pinfo[fname]["slot_activations"] = word_values
-                # pinfo[fname]["activation"] = pooled_vals[w_size_ix][jx]  # TODO cast to python/numpy from torch?
-
-        # interpretation_info["prediction_info"].append(pinfo)
+                interpretation_info["slot_activations"][fname].append(slot_acts)
+                interpretation_info["chosen_ngrams_by_filter"][fname].append(seq[ngram_ix:ngram_ix + w_size])
+                interpretation_info["predicted_class"][fname].append(prediction)
 
         n_iter += 1
 
         del batch_x, batch_y, lengths_x, out
 
-    for fname in interpretation_info["sorted_word_values"]:
-        interpretation_info["sorted_word_values"][fname] \
-            = np.array([list(vals_dict.values()) for vals_dict in interpretation_info["sorted_word_values"][fname]])
-        interpretation_info["sorted_word_pred_class"][fname] \
-            = np.array(interpretation_info["sorted_word_pred_class"][fname])
+    for fname in interpretation_info["slot_activations"]:
+        interpretation_info["slot_activations"][fname] \
+            = np.array([list(vals_dict.values()) for vals_dict in interpretation_info["slot_activations"][fname]])
+        interpretation_info["predicted_class"][fname] = np.array(interpretation_info["predicted_class"][fname])
 
-    # print(interpretation_info)
     return interpretation_info
 
 
-def calculate_threshold(v, purity_class, minimum_purity):
+def calculate_threshold(sorted_predictions, purity_class, minimum_purity):
     """
     Get the threshold with the purity heuristic.
 
@@ -357,23 +317,23 @@ def calculate_threshold(v, purity_class, minimum_purity):
     task of deciding whether an ngram is important or not - i.e., whether the label of the original sentence matches
     the identity class of the filter.
 
-    :param v: all of the labels of the interpretation dataset, sorted by the activation strength of the
-              max-pooling layer of the filter in question
+    :param sorted_predictions: all of the predictions of the interpretation dataset,
+           sorted by the activation strength of the max-pooling layer of the filter in question
     :param purity_class: the identity class of the filter in question
     :param minimum_purity: the minimum purity value to be achieved by the threshold
     :return: the lowest threshold that satisfies the purity level
     """
-    ix = len(v) - 1
+    ix = len(sorted_predictions) - 1
 
-    count = sum(v[:ix] == purity_class)
+    count = sum(sorted_predictions[:ix] == purity_class)
     purity = count / ix
+
     while purity < minimum_purity:
         ix -= 1
-
         if ix <= 0:
             return 0, 0
 
-        if v[ix] == purity_class:
+        if sorted_predictions[ix] == purity_class:
             count -= 1
 
         purity = count / ix
@@ -383,120 +343,65 @@ def calculate_threshold(v, purity_class, minimum_purity):
 
 def model_interpretation_1(model, data, interpretation_info, config):
     filters = model.get_filters()
-    biases_flat = np.concatenate([layer_biases.cpu().data.numpy() for filters_layer, layer_biases in filters])
     W, b = model.get_fc_weights()
     embeddings = model.get_embeddings()
-    a = {}
-    max_filter_val = -float('inf')
-    max_filter = None
 
     for (filters_layer, layer_biases), (layer_index, layer_name) in zip(filters, enumerate(config["ngram_sizes"])):
-        # a[layer_name] = []
-
         for jx, f in enumerate(filters_layer):
-
             fname = "w" + str(layer_name) + ".f" + str(jx)
             f_out = open(config["model_path"] + "/model_interpretation/" + fname + "/filter_info.md", "w", encoding="UTF-8")
 
-            # print(f)
             window = [f[i:i + config["embedding_dim"]] for i in range(0, filters_layer.size()[1], config["embedding_dim"])]
             bias = layer_biases[jx]
 
-            # if params["save_filter_info"]:
-            #     filter_info[fname]["bias"] = bias.item()
-            #     filter_info[fname]["convolution"] = f.detach().cpu().numpy()
-
             amount = config["top_k_in_logs"]
-            names = [[] for _ in range(amount)]
+            top_names = [[] for _ in range(amount)]
             names_max = [[] for _ in range(amount)]
             bottom_names = [[] for _ in range(amount)]
             names_min = [[] for _ in range(amount)]
 
-            # wordlist = ["not", "n't", "is", "are", "were"]
-            # choice_names = [[] for _ in range(len(wordlist))]
-            # choice_val = [[] for _ in range(len(wordlist))]
-
-            name1, name2, name3 = [], [], []
-            name1max, name2max, name3max = [], [], []
-            # name1neg, name2neg, name3neg = [], [], []
-            filter_word_averages = []
-
-            # filter_val = 0
-
             for word_ix, word_filter in enumerate(window):
                 dist = embeddings.matmul(word_filter).cpu().detach().numpy()
 
-                # argmax = torch.max(dist, 0)[1]
-                # print(dist)
-                # max_val, argmax = dist.topk(len(dist), 0)
-                argsort = np.argsort(dist)
+                arg_sort = np.argsort(dist)
 
-                mm, aa = [], []
-                # for m_val, a_val in zip(max_val, argmax):
-                for a_val in argsort[::-1]:
+                max_val, arg_max = [], []
+                for a_val in arg_sort[::-1]:
                     m_val = dist[a_val]
-                    # print(mm, aa, ":", m_val, a_val)
                     if data["idx_to_word"][int(a_val)] in data["vocab"]:
-                        mm.append(m_val)
-                        aa.append(a_val)
-                        if len(mm) == amount:
-                            # print("my my ")
+                        max_val.append(m_val)
+                        arg_max.append(a_val)
+                        if len(max_val) == amount:
                             break
-                max_val, argmax = mm, aa
+                # max_val, arg_max = mm, aa
 
-                mm, aa = [], []
-                # for m_val, a_val in zip(min_val, argmin):
-                for a_val in argsort:
+                min_val, arg_min = [], []
+                for a_val in arg_sort:
                     m_val = dist[a_val]
-                    # print(mm, aa, ":", m_val, a_val)
                     if data["idx_to_word"][int(a_val)] in data["vocab"]:
-                        mm.append(m_val)
-                        aa.append(a_val)
-                        if len(mm) == amount:
-                            # print("my my ")
+                        min_val.append(m_val)
+                        arg_min.append(a_val)
+                        if len(min_val) == amount:
                             break
-                min_val, argmin = mm, aa
-
-                # argmax = [x for x in argmax if int(x) in common_words]
-                # max_val = [0,0,0]
+                # min_val, arg_min = min_val, arg_min
 
                 for i in range(amount):
-                    if len(argmax) < i + 1:
-                        names[i].append("N/A")
+                    if len(arg_max) < i + 1:
+                        top_names[i].append("N/A")
                         names_max[i].append(-1)
                     else:
-                        names[i].append(data["idx_to_word"][int(argmax[i])])
+                        top_names[i].append(data["idx_to_word"][int(arg_max[i])])
                         names_max[i].append(float(max_val[i]))
 
                 for i in range(amount):
-                    if len(argmin) < i + 1:
+                    if len(arg_min) < i + 1:
                         bottom_names[i].append("N/A")
                         names_min[i].append(-1)
                     else:
-                        bottom_names[i].append(data["idx_to_word"][int(argmin[i])])
+                        bottom_names[i].append(data["idx_to_word"][int(arg_min[i])])
                         names_min[i].append(float(min_val[i]))
 
-                # for i in range(len(wordlist)):
-                #     if wordlist[i] in data["word_to_idx"]:
-                #         choice_names[i].append(wordlist[i])
-                #         choice_val[i].append(dist[data["word_to_idx"][wordlist[i]]])
-
-                filter_word_averages.append(
-                    str(interpretation_info["filter_word_sum"][layer_name][jx][word_ix]
-                        / interpretation_info["filter_word_count"][layer_name][jx][word_ix]))
-                # filter_val += float(max_val[0])
-
-            if sum(name1max) > max_filter_val:
-                max_filter_val = sum(name1max)
-                max_filter = name1
-
             print("# " + fname, file=f_out)
-            # print("#### Linear layer bias:", b, file=f_out)
-
-            # print("Bias | Pos | Neg", file=f_out)
-            # print(":--: | :--: | :--:", file=f_out)
-            # jxx = config["num_filters"] * layer_index + jx
-            # print(bias.item(), "|", W[1][jxx].item(), "|", W[0][jxx].item(), file=f_out)
 
             print("#### Weights", file=f_out)
             print("Name | Value | Description", file=f_out)
@@ -514,10 +419,9 @@ def model_interpretation_1(model, data, interpretation_info, config):
             header = "Slot: |" + ' | '.join(["#" + str(slot) + " | val" for slot in range(num_slots)])
             print(header, file=f_out)
             print(":--: | " + ' | '.join([":--:" for _ in range(num_slots * 2)]), file=f_out)
-            print("Avg: |  |", ' |  | '.join(filter_word_averages), file=f_out)
 
             for i in range(amount):
-                print(str(i) + ": |", " | ".join([w + " | " + str(val) for w, val in zip(names[i], names_max[i])]),
+                print(str(i) + ": |", " | ".join([w + " | " + str(val) for w, val in zip(top_names[i], names_max[i])]),
                       file=f_out)
 
             print("### Smallest words by slot", file=f_out)
@@ -525,49 +429,42 @@ def model_interpretation_1(model, data, interpretation_info, config):
             header = "Slot: |" + ' | '.join(["#" + str(slot) + " | val" for slot in range(num_slots)])
             print(header, file=f_out)
             print(":--: | " + ' | '.join([":--:" for _ in range(num_slots * 2)]), file=f_out)
-            print("Avg: |  |", ' |  | '.join(filter_word_averages), file=f_out)
             for i in range(amount):
                 print(str(i) + ": |", " | ".join([w + " | " + str(val) for w, val in zip(bottom_names[i], names_min[i])]),
                       file=f_out)
 
 
 def model_interpretation_2(model, interpretation_info, config):
-    sorted_word_values = interpretation_info["sorted_word_values"]
-    sorted_word_ngrams = interpretation_info["sorted_word_ngrams"]
-    sorted_word_pred_class = interpretation_info["sorted_word_pred_class"]
+    slot_activations = interpretation_info["slot_activations"]
+    chosen_ngrams_by_filter = interpretation_info["chosen_ngrams_by_filter"]
+    predicted_class = interpretation_info["predicted_class"]
 
     W, b = model.get_fc_weights()
 
-    # print('==== Sample name:', sample_name)
+    threshold_info = {}
+    threshold_info["thresholds"] = np.array([[0.] * config["num_filters"]] * len(config["ngram_sizes"]))
+    threshold_info["thresholds_x"] = {}
+    threshold_info["average_coverage"] = 0.
+    threshold_info["coverage_percentages_flat"] = np.array([0.] * (config["num_filters"] * len(config["ngram_sizes"])))
+    threshold_info["purities"] = {}
+    threshold_info["coverages"] = {}
+    threshold_info["identity_classes"] = {}
 
-    thresholds = {}
-    thresholds["thresholds"] = np.array([[0.] * config["num_filters"]] * len(config["ngram_sizes"]))
-    # thresholds = np.array([[0.] * config["num_filters"]] * len(config["ngram_sizes"]))
-    thresholds["thresholds_x"] = {}
-    thresholds["average_coverage"] = 0.
-    thresholds["coverage_percentages_flat"] = np.array([0.] * (config["num_filters"] * len(config["ngram_sizes"])))
-    thresholds["purities"] = {}
-    thresholds["coverages"] = {}
-    thresholds["identity_classes"] = {}
-
-    num_clusters_flat = np.array([0.] * (config["num_filters"] * len(config["ngram_sizes"])))
-
-    for fname in sorted_word_values:
+    for fname in slot_activations:
         f_out = open(config["model_path"] + "/model_interpretation/" + fname + "/filter_info_2.md", "w",
                      encoding="UTF-8")
         print('## Filter:', fname, file=f_out)
         print('filter:', fname)
 
-        X = sorted_word_values[fname]
+        X = slot_activations[fname]
 
-        ngrams = sorted_word_ngrams[fname]
+        ngrams = chosen_ngrams_by_filter[fname]
         ngrams_s = sorted(zip(X, ngrams), key=lambda ix: float(ix[0].sum()))[::-1]
         ngrams = [ngram for ix, ngram in ngrams_s]
 
-        # for cl in sorted_word_pred_class[fname]:
-        preds = sorted_word_pred_class[fname]
+        preds = predicted_class[fname]
         preds_s = sorted(zip(X, preds), key=lambda ix: float(ix[0].sum()))[::-1]
-        sorted_word_pred_class[fname] = [pred for ix, pred in preds_s]
+        predicted_class[fname] = [pred for ix, pred in preds_s]
 
         my_ngrams = np.array([' '.join(ngram).encode('ascii', 'ignore') for ngram in ngrams], dtype=np.string_)
         X = np.array([ix for ix, ngram in ngrams_s])
@@ -576,7 +473,7 @@ def model_interpretation_2(model, interpretation_info, config):
         w_size_idx = config["ngram_sizes"].index(int(fname.split('.')[0][1:]))
         fix = w_size_idx * config["num_filters"] + fix_
         fval = torch.max(W[:, fix], 0)[1]
-        v = np.array(sorted_word_pred_class[fname]).astype(int)
+        v = np.array(predicted_class[fname]).astype(int)
 
         print("#### Threshold", file=f_out)
         print("x (%) | y | r", file=f_out)
@@ -593,22 +490,20 @@ def model_interpretation_2(model, interpretation_info, config):
             print(t, "(" + str(int(t / len(X) * 100)) + "%)", "|", thresh_val, "|", p, file=f_out)
             print("threshold:", "x:", t, "y:", thresh_val, "purity:", p)
 
-        thresholds["thresholds"][w_size_idx, fix_] = sum(X[t])
-        thresholds["average_coverage"] += t / len(X) * 100
-        thresholds["coverage_percentages_flat"][fix] = t / len(X) * 100
-        thresholds["thresholds_x"][fix] = t
-        thresholds["purities"][fname] = p * 100
-        thresholds["coverages"][fname] = t / len(X) * 100
-        thresholds["identity_classes"][fname] = fval.item()
+        threshold_info["thresholds"][w_size_idx, fix_] = sum(X[t])
+        threshold_info["average_coverage"] += t / len(X) * 100
+        threshold_info["coverage_percentages_flat"][fix] = t / len(X) * 100
+        threshold_info["thresholds_x"][fix] = t
+        threshold_info["purities"][fname] = p * 100
+        threshold_info["coverages"][fname] = t / len(X) * 100
+        threshold_info["identity_classes"][fname] = fval.item()
 
         if t == 0:
             t = 1
-        # if len([config["minimum_purity"]]) > 1:
         X = X[:t]  # Threshold
         ngrams = ngrams[:t]  # Threshold
         my_ngrams = my_ngrams[:t]  # Threshold
 
-        # X_sums = X.sum(1)
         X_averages = X.mean(0)
 
         print("##### Biggest ngrams:", file=f_out)
@@ -660,43 +555,33 @@ def model_interpretation_2(model, interpretation_info, config):
 
     f_out.close()
 
-    thresholds["average_coverage"] /= (config["num_filters"] * len(config["ngram_sizes"]))
+    threshold_info["average_coverage"] /= (config["num_filters"] * len(config["ngram_sizes"]))
 
-    return thresholds
+    return threshold_info
 
 
 def model_interpretation_3_clustering(model, interpretation_info, thresholds, config):
-    sorted_word_values = interpretation_info["sorted_word_values"]
-    sorted_word_ngrams = interpretation_info["sorted_word_ngrams"]
-    sorted_word_pred_class = interpretation_info["sorted_word_pred_class"]
-
-    W, b = model.get_fc_weights()
-
-    # print('==== Sample name:', sample_name)
-    # for fname in sorted_word_values:
-    #     sorted_word_values[fname] = np.array([list(vals_dict.values()) for vals_dict in sorted_word_values[fname]])
-    #     pred_class_mask_pos = np.array(list(map(lambda v: v == 'pos', sorted_word_pred_class[fname])))
-    #     pred_class_mask_neg = np.array(list(map(lambda v: v == 'neg', sorted_word_pred_class[fname])))
-    #     sorted_word_pred_class[fname] = {'pos': pred_class_mask_pos, 'neg': pred_class_mask_neg}
+    slot_activations = interpretation_info["slot_activations"]
+    chosen_ngrams_by_filter = interpretation_info["chosen_ngrams_by_filter"]
+    predicted_class = interpretation_info["predicted_class"]
 
     num_clusters_flat = np.array([0.] * (config["num_filters"] * len(config["ngram_sizes"])))
 
-    for fname in sorted_word_values:
+    for fname in slot_activations:
         f_out = open(config["model_path"] + "/model_interpretation/" + fname + "/cluster_info.md", "w",
                      encoding="UTF-8")
         print('## Filter:', fname, file=f_out)
         print('filter:', fname)
 
-        X = sorted_word_values[fname]
+        X = slot_activations[fname]
 
-        ngrams = sorted_word_ngrams[fname]
+        ngrams = chosen_ngrams_by_filter[fname]
         ngrams_s = sorted(zip(X, ngrams), key=lambda ix: float(ix[0].sum()))[::-1]
         ngrams = [ngram for ix, ngram in ngrams_s]
 
-        # for cl in sorted_word_pred_class[fname]:
-        preds = sorted_word_pred_class[fname]
+        preds = predicted_class[fname]
         preds_s = sorted(zip(X, preds), key=lambda ix: float(ix[0].sum()))[::-1]
-        sorted_word_pred_class[fname] = [pred for ix, pred in preds_s]
+        predicted_class[fname] = [pred for ix, pred in preds_s]
 
         my_ngrams = np.array([' '.join(ngram).encode('ascii', 'ignore') for ngram in ngrams], dtype=np.string_)
         X = np.array([ix for ix, ngram in ngrams_s])
@@ -716,21 +601,10 @@ def model_interpretation_3_clustering(model, interpretation_info, thresholds, co
         ngrams = ngrams[:t]  # Threshold
         my_ngrams = my_ngrams[:t]  # Threshold
 
-        # X_sums = X.sum(1)
-        # X_averages = X.mean(0)
-
-        X = X[:t]  # Threshold
-        ngrams = ngrams[:t]  # Threshold
-        my_ngrams = my_ngrams[:t]  # Threshold
-
-        # X_sums = X.sum(1)
-        # X_averages = X.mean(0)
-
         ms = MeanShift()  # bin_seeding=True)
         ms.fit(X)
 
         labels = ms.labels_
-        # cluster_centers = ms.cluster_centers_ ####################### MEAN SHIFT
 
         labels_unique = np.unique(labels)
         n_clusters_ = len(labels_unique)
@@ -738,7 +612,7 @@ def model_interpretation_3_clustering(model, interpretation_info, thresholds, co
         num_clusters_flat[fix] = n_clusters_
 
         print("## Number of estimated clusters : %d" % n_clusters_, file=f_out)
-        # print(ngrams)
+
         for k in range(n_clusters_):
             my_members = labels == k
             ngrams_transposed = [[] for _ in range(len(ngrams[0]))]
@@ -831,20 +705,17 @@ if __name__ == '__main__':
     """
     TODO
     
-    (v) Change top 30/50 to top 100 (or top k from config)
-    Print prediction interpretation or output to markdown
-    Meaningful names
-    Better prints
-    Documentation
-    Final cleanup
     Test:
-    1. cuda on train
-    2. cuda on interpretation
     3. elec/amazon with larger model
     4. Something with more than 2 classes (can just change some numbers....)
     """
+    parser = argparse.ArgumentParser()
 
-    with open("/home/nlp/jacovia/nlp_clust/rewrite/interpretation_config.json") as fp:
+    parser.add_argument("-c", "--config", type=str, required=True)
+
+    args = parser.parse_args()
+
+    with open(args.config) as fp:
         interpretation_config = json.load(fp)
 
     model_path = interpretation_config["model_path"]
@@ -869,34 +740,30 @@ if __name__ == '__main__':
             if not os.path.exists(interpretation_config["model_path"] + "/model_interpretation/" + fname):
                 os.makedirs(interpretation_config["model_path"] + "/model_interpretation/" + fname)
 
-    print("Doing 0")
+    print("Getting training set activation data for interpretation...")
+    interpretation_info = get_activations(data, model, config, sample_size=config["sample_size"])
 
-    interpretation_info = get_activations(data, model, config, sample_size=150)
-
-    print("Doing 1")
-
+    print("Token-level interpretation (biggest/smallest words per slot)...")
     model_interpretation_1(model, data, interpretation_info, config)
 
-    print("Doing 2")
-
+    print("Ngram-level interpretation and threshold calculation...")
     threshold_info = model_interpretation_2(model, interpretation_info, config)
     interpretation_info["threshold_info"] = threshold_info
 
-    if "cluster" in config and config["cluster"]:
-        model_interpretation_3_clustering(model, interpretation_info, threshold_info, config)
-
-    print("Doing eval")
-
+    print("Evaluating thresholds...")
     loss, acc = eval_epoch_with_thresholds(model, data, config, threshold_info)
     print(f"Model with thresholds performance:\tLoss: {loss}\tAccuracy: {acc}")
 
-    print("Doing pred")
+    if "cluster" in config and config["cluster"]:
+        print("Slot activation vector clustering...")
+        model_interpretation_3_clustering(model, interpretation_info, threshold_info, config)
 
+    print("Prediction interpretation...")
     prediction_interpretation = interpret_predictions(data, model, config)
 
     with open(config["model_path"] + "/prediction_interpretation.json", "w") as fp:
         json.dump(prediction_interpretation, fp=fp)
 
+    print("Saving prediction interpretation to markdown...")
     with open(config["model_path"] + "/prediction_interpretation.md", "w") as fp:
         fp.write(prettify_prediction_interpretation(interpretation_info, prediction_interpretation, config))
-
