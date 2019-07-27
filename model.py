@@ -7,12 +7,6 @@ import numpy as np
 class CnnClassifier(nn.Module):
     def __init__(self, ngram_sizes, embedding_dim, num_filters, padding_idx, num_classes, vocab_size):
         super(CnnClassifier, self).__init__()
-        # self.ngram_sizes = config["model_ngram_sizes"]
-        # self.embedding_dim = config["model_embedding_dim"]
-        # self.num_filters = config["model_num_filters"]
-        # self.padding_idx = config["padding_idx"]  ###
-        # self.num_classes = config["num_classes"]  ###
-        # self.vocab_size = config["vocab_size"]  ###
         self.ngram_sizes = ngram_sizes
         self.embedding_dim = embedding_dim
         self.num_filters = num_filters
@@ -56,18 +50,6 @@ class CnnClassifier(nn.Module):
         logit = self.fc(pooled)
         out['logits'] = logit
         return out
-
-    # def forward_log_activations(self, x):
-    #     x = self.pad(x)
-    #     embedded_x = self.embedding(x)
-    #     embedded_x = embedded_x.view(-1, 1, x.shape[1] * embedded_x.shape[2])  # [batch_size, 1, seq_len * word_dim]
-    #     features = [conv(embedded_x) for conv in self.convs]
-    #     features_act = [F.relu(v) for v in features]  # [batch_size, num_features, seq_len]
-    #     ngram_indices = [feat.max(2)[1] for feat in features_act]
-    #     pooled = [F.max_pool1d(feat, feat.size()[2]).view(-1, feat.shape[1]) for feat in features_act]
-    #     pooled_cat = torch.cat(pooled, 1)
-    #     logit = self.fc(pooled_cat)
-    #     return logit, features, pooled, ngram_indices
 
     def get_filters(self):
         return [(conv.weight.squeeze(), conv.bias) for conv in self.convs]
