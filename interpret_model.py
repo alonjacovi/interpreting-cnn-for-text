@@ -65,12 +65,11 @@ def prettify_prediction_interpretation(interpretation_info, prediction_interpret
     * marked text: each token is preceded by a colored @ with a color corresponding to the class of the filter
       that "chose" an ngram containing this token.
     * a table of all the prediction data:
-      filter name | passes | ngram | activation | slots
+      filter name | filter identity class | passes | ngram | activation | slots
 
       - filter name format: w{ngram size}.f{filter index} ex. w3.f4 = filter number
         4 among the filters processing ngrams of size 3
       - passes: whether the ngram passes the threshold of this filter
-      - ngram: ngram string
       - activation: the final activation of the filter on this ngram. note that this number does NOT equal the sum of
         the slot activations, because it includes the filter bias weight and is after the ReLU layer (non-negative)
       - slots: the slot activation vector, i.e. the token-level activations gathered from breaking the filter-ngram
@@ -88,7 +87,7 @@ def prettify_prediction_interpretation(interpretation_info, prediction_interpret
                 marked_ngram.append(mark + token)
         return sentence[:span_start] + marked_ngram + sentence[span_end:]
 
-    colors = ["#FFFF00", "#6698FF", "#E56717", "#00FF7F", "#FFA07A", "#FF8C00"] # add more colors here
+    colors = ["#FFFF00", "#6698FF", "#E56717", "#00FF7F", "#FFA07A", "#FF8C00"]  # add more colors here
     class_to_color = {}
     for cl, color in zip(list(config["class_to_str"]), colors):
         class_to_color[cl] = color
@@ -99,8 +98,8 @@ def prettify_prediction_interpretation(interpretation_info, prediction_interpret
     for pinfo in prediction_interpretation:
         sen = pinfo["sentence"]
 
-        table = "filter | passes | ngram | activation | slots\n"
-        table += ":-- | :-- | :-- | :-- | :--\n"
+        table = "filter | filter class | passes | ngram | activation | slots\n"
+        table += ":-- | :-- | :-- | :-- | :-- | :--\n"
         for wix, w_size in enumerate(config["ngram_sizes"]):
             for fix in range(config["num_filters"]):
                 fname = "w" + str(w_size) + ".f" + str(fix)
@@ -109,14 +108,14 @@ def prettify_prediction_interpretation(interpretation_info, prediction_interpret
 
                 c = identity_classes[fname]
 
-                # fix_ = wix * params["feature_num"] + fix
                 passes = "x" if pinfo[fname]["activation"] > thresholds[wix, fix] else " "
 
                 if passes == "x":
                     sen = mark_span(sen, ngram_span[0], ngram_span[1], class_to_color[str(c)])
 
                 l = " | ".join(
-                    [fname, passes, "`" + ngram + "`", "{0:.2f}".format(pinfo[fname]["activation"]),
+                    [fname, config["class_to_str"][str(c)], passes, "`" + ngram + "`",
+                     "{0:.2f}".format(pinfo[fname]["activation"]),
                      str(["{0:.2f}".format(i) for i in pinfo[fname]["slot_activations"]])]) + "\n"
                 table += l
 
@@ -156,7 +155,6 @@ def interpret_predictions(data, model, config):
         if config["cuda"]:
             batch_x, batch_y, lengths_x = batch_x.cuda(), batch_y.cuda(), lengths_x.cuda()
 
-        # optimizer.zero_grad()
         out = model(batch_x)
 
         pinfo = {}
