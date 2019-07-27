@@ -67,19 +67,21 @@ For a pre-specified output path in the training config, after both training and 
     
     d. `cluster_info.md` - a Markdown description of the filter's semantic clusters (hopefully - but beware, clustering is not an exact science)
     
-    e. `clusters.pdf` - a visualization of the clustering, only for `w2` and `w3` where such a thing is possible (2D and 3D plots).
+    e. `clusters.pdf` - a scatterplot visualization of the clustering, only for `w2` and `w3` where such a thing is possible (2D and 3D plots).
 
 #### Limitations
 
-1. This code doesn't (yet) support pre-trained embeddings, but it's easy to add! If you wish to use them, you need to do two things:
+1. If you wish to use pre-trained embeddings, you need to do two things:
 
-    a. Prepare a mapping dictionary from token strings to embedding indices, and pass it to the `load_data()` function in `train_model.py`.
+    a. Prepare a token->index mapping dictionary (token indexer) from your token strings to embedding indices, and pass it to the `data.py`/`load_data()` function call in `train_model.py`. Please use `@@PAD@@` for the padding token and `@@UNK@@` for unseen/rare tokens.
 
-    b. Prepare an embeddings matrix and just plug it into the model using the `set_pretrained_embeddings()` function of the model class, also in `train_model.py`.
+    b. Prepare an embeddings matrix and just plug it into the model using the `model.py`/`set_pretrained_embeddings()` function of the model class, also in `train_model.py`.
     
 2. The model interpretation currently just saves Markdown files that have the top-k scoring tokens/ngrams per slot/filter. If you wish to get better access to the interpretation info, you'll have to look into the code of the `model_interpretation_?()` functions and extract whatever info you want.
 
 3. I haven't extensively tested the code for data that has more than two classes (binary classification). If your data has more than 2 classes, it should still work, but let me know if something breaks or seems wrong.
+
+4. This code does not support deriving "Negative Ngrams" per filter (and specifically no "Case 2 Negative Ngrams").
 
 ### Paper
 
