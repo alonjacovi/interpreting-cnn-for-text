@@ -14,6 +14,8 @@ This code requires PyTorch and Scikit-learn. A Markdown viewer is also recommend
 2. Run `train_model.py -c config.json`
 3. Run `interpret_model.py -c interpretation_config.json`
 
+This repository already contains the output of the demo run under `out/test`. Feel free to view the output markdown (`.md`) logs to get a feel for it.
+
 Step (2) trains a CNN model on the MR dataset (already in the repo) according to the parameters in the `config.json` file. Step (3) interprets the model according to parameters in the `interpretation_config.json` file.
 
 ### General usage
@@ -29,9 +31,11 @@ Loads the given data (via `data.py`) and trains a model (via `model.py`), then s
 #### `interpretation_config.json` 
 Contains the paths to the trained model and data to do prediction interpretation as well as other interpretation parameters. Any parameters in this config that also exist in the training config will override the training config's parameters during interpretation. Use as a template for your own configuration.
 
-`minimum_purity` refers to the lowest purity level we require of each threshold.
+`minimum_purity` - the lowest purity level we require of each threshold.
 
-`top_k_in_logs` refers to the top-k level of biggest/smallest ngrams to be printed to the Markdown files.
+`top_k_in_logs` - the top-k level of biggest/smallest ngrams to be printed to the Markdown files.
+
+`sample_size` - the amount of instances to randomly select from the data to use for interpretation (for runtime efficiency)
 
 #### `interpret_model.py -c <path_to_config>`
 Interpret a model according to the paper in multiple stages:
