@@ -703,13 +703,6 @@ def model_interpretation_3_clustering(model, interpretation_info, thresholds, co
 
 
 if __name__ == '__main__':
-    """
-    TODO
-    
-    Test:
-    3. elec/amazon with larger model
-    4. Something with more than 2 classes (can just change some numbers....)
-    """
     parser = argparse.ArgumentParser()
 
     parser.add_argument("-c", "--config", type=str, required=True)
