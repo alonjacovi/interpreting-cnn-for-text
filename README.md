@@ -77,6 +77,10 @@ For a pre-specified output path in the training config, after both training and 
     
     e. `clusters.pdf` - a scatterplot visualization of the clustering, only for `w2` and `w3` where such a thing is possible (2D and 3D plots).
 
+6. `prediction_interpretation.json` - A JSON file of all of the explanations given for each instance in the given data file path `pred_x_path` in the interpretation config. It contains the important ngrams with their slot activations and other details.
+
+7. `prediction_interpretation.md` - A Markdown prettified version of the JSON file (6). Best viewed with a color Markdown viewer that can display the text with their HTML colorings.
+
 #### Limitations
 
 1. If you wish to use pre-trained embeddings, you need to do two things:
