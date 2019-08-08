@@ -1,57 +1,5 @@
 # Prediction info
-## Note: Please view with a color markdown viewer! The "@" signs are supposed to be colored according to the filter's identity class.
-
-## Original input: 
-``` a reality - @@UNK@@ @@UNK@@ . ``` 
-
-## Marked input: 
-<pre>a <span style="background-color: #6698FF">@</span>reality <span style="background-color: #6698FF">@</span>- <span style="background-color: #6698FF">@</span>@@UNK@@ <span style="background-color: #6698FF">@</span>@@UNK@@ <span style="background-color: #6698FF">@</span>.</pre> 
-
-Gold: neg, Prediction: neg
-
-
-filter | filter class | passes | ngram | activation | slots
-:-- | :-- | :-- | :-- | :-- | :--
-w2.f0 | pos |   | `@@UNK@@ @@UNK@@` | 0.81 | ['1.98', '-0.79']
-w2.f1 | pos |   | `a reality` | 0.91 | ['2.95', '-1.91']
-w2.f2 | pos |   | `@@PAD@@ @@PAD@@` | 0.00 | ['0.00', '0.00']
-w2.f3 | neg |   | `@@PAD@@ @@PAD@@` | 0.00 | ['0.00', '0.00']
-w2.f4 | pos |   | `a reality` | 1.81 | ['2.27', '-0.27']
-w2.f5 | pos |   | `. @@PAD@@` | 0.37 | ['0.67', '0.00']
-w2.f6 | pos |   | `a reality` | 1.10 | ['0.54', '0.66']
-w2.f7 | neg |   | `reality -` | 0.47 | ['2.26', '-0.88']
-w2.f8 | pos |   | `@@PAD@@ a` | 2.34 | ['0.00', '2.56']
-w2.f9 | neg |   | `reality -` | 2.89 | ['2.44', '0.46']
-w2.f10 | pos |   | `@@PAD@@ a` | 0.06 | ['0.00', '0.20']
-w2.f11 | neg |   | `reality -` | 1.40 | ['2.70', '-1.02']
-w2.f12 | neg |   | `reality -` | 1.05 | ['1.69', '-0.61']
-w2.f13 | neg | x | `reality -` | 3.47 | ['2.43', '1.20']
-w2.f14 | neg |   | `@@UNK@@ .` | 1.04 | ['0.69', '0.39']
-w2.f15 | pos |   | `@@PAD@@ @@PAD@@` | 0.00 | ['0.00', '0.00']
-w2.f16 | neg |   | `a reality` | 2.58 | ['-0.39', '3.73']
-w2.f17 | neg |   | `@@PAD@@ @@PAD@@` | 0.00 | ['0.00', '0.00']
-w2.f18 | pos |   | `a reality` | 0.94 | ['0.76', '0.30']
-w2.f19 | pos |   | `a reality` | 2.94 | ['0.99', '2.25']
-w3.f0 | neg | x | `@@PAD@@ a reality` | 4.60 | ['0.00', '3.29', '1.70']
-w3.f1 | pos |   | `a reality -` | 0.06 | ['-1.76', '0.55', '1.66']
-w3.f2 | neg |   | `a reality -` | 2.50 | ['1.87', '0.18', '0.54']
-w3.f3 | pos |   | `@@PAD@@ @@PAD@@ a` | 0.00 | ['0.00', '0.00', '-0.45']
-w3.f4 | pos |   | `@@PAD@@ @@PAD@@ a` | 0.00 | ['0.00', '0.00', '-0.65']
-w3.f5 | pos |   | `@@PAD@@ @@PAD@@ a` | 0.74 | ['0.00', '0.00', '1.07']
-w3.f6 | neg |   | `a reality -` | 3.16 | ['1.76', '2.16', '-0.54']
-w3.f7 | pos |   | `reality - @@UNK@@` | 0.77 | ['2.40', '-1.06', '-0.07']
-w3.f8 | pos |   | `@@PAD@@ @@PAD@@ a` | 0.00 | ['0.00', '0.00', '-0.46']
-w3.f9 | neg | x | `reality - @@UNK@@` | 3.84 | ['2.29', '-0.49', '2.13']
-w3.f10 | neg |   | `@@UNK@@ . @@PAD@@` | 2.18 | ['0.33', '2.00', '0.00']
-w3.f11 | neg |   | `@@PAD@@ @@PAD@@ a` | 2.59 | ['0.00', '0.00', '2.78']
-w3.f12 | neg |   | `reality - @@UNK@@` | 3.81 | ['2.53', '2.81', '-1.41']
-w3.f13 | pos |   | `@@UNK@@ @@UNK@@ .` | 0.42 | ['-0.04', '-1.74', '2.45']
-w3.f14 | neg |   | `reality - @@UNK@@` | 0.18 | ['1.12', '0.52', '-1.37']
-w3.f15 | neg |   | `@@PAD@@ a reality` | 1.29 | ['0.00', '-0.09', '1.55']
-w3.f16 | pos |   | `@@PAD@@ @@PAD@@ a` | 0.00 | ['0.00', '0.00', '-2.12']
-w3.f17 | neg |   | `@@PAD@@ a reality` | 0.27 | ['0.00', '-1.45', '1.87']
-w3.f18 | pos |   | `@@PAD@@ @@PAD@@ a` | 0.00 | ['0.00', '0.00', '-0.37']
-w3.f19 | pos |   | `a reality -` | 2.03 | ['3.70', '-0.05', '-1.51']
+## Note: Please view with a COLOR Markdown viewer! The "@" signs are supposed to be colored according to the filter's identity class.
 
 ## Original input: 
 ``` it 's a glorious spectacle like those d . w . @@UNK@@ made in the early days of silent film . ``` 
