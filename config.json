@@ -1,8 +1,8 @@
 {
   "train_x_path": "mr_dataset/train.txt.tok",
   "train_y_path": "mr_dataset/train.cat",
-  "valid_x_path": "mr_dataset/valid.txt.tok",
-  "valid_y_path": "mr_dataset/valid.cat",
+  "valid_x_path": "mr_dataset/test.txt.tok",
+  "valid_y_path": "mr_dataset/test.cat",
   "cuda": true,
   "rare_word_threshold": 2,
   "model_path": "out/test",
