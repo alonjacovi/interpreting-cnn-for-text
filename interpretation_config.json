@@ -1,8 +1,8 @@
 {
   "cuda": true,
   "model_path": "out/test",
-  "pred_x_path": "mr_dataset/valid.txt.tok",
-  "pred_y_path": "mr_dataset/valid.cat",
+  "pred_x_path": "mr_dataset/test.txt.tok",
+  "pred_y_path": "mr_dataset/test.cat",
   "minimum_purity": 0.6,
   "top_k_in_logs": 100,
   "sample_size": 2000,
