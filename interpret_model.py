@@ -723,10 +723,11 @@ if __name__ == '__main__':
 
     data = load_data(config=config, word_to_idx=w2i)
 
-    model = torch.load(model_path+'/model')
-
     if config["cuda"]:
+        model = torch.load(model_path+'/model')
         model = model.cuda()
+    else:
+        model = torch.load(model_path+'/model', map_location=torch.device('cpu'))
 
     for ngram_size in config["ngram_sizes"]:
         for filter_ix in range(config["num_filters"]):
