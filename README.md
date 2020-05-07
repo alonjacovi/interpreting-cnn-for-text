@@ -47,8 +47,8 @@ Interpret a model according to the paper in multiple stages:
 1. Get all of the inference data for interpretation:
     a. The filter activations for every ngram in the input
     b. The chosen ngrams during max-pooling
-    b. The max-pooled activations for the chosen ngrams
-    c. The final prediction
+    c. The max-pooled activations for the chosen ngrams
+    d. The final prediction
 2. Token-level interpretation: the biggest and smallest tokens (words) per slot of every filter. The information is saved to a Markdown file in top-k format (see the "interpretation output" section of this README).
 3. Ngram-level interpretation: the biggest and smallest ngrams per filter, as well as threshold calculation according to the paper's "purity" heuristic. The information is saved as a Markdown file and is also present as an organized python dict in the code.
 4. Clustering of the slot activation vectors. The information is saved as a Markdown file and clustering scatter plots.
