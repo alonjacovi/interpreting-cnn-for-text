@@ -4,8 +4,6 @@ Alon Jacovi, Oren Sar Shalom, Yoav Goldberg
 
 Link: https://aclweb.org/anthology/papers/W/W18/W18-5408/
 
-Contact: Alon Jacovi (alonjacovi@gmail.com)
-
 ### Description
 
 This repo attempts to derive interpretations (explanations) for 1D CNN networks trained to classify text. This is done by finding the ngrams that maximize each filter in the convolution, calculating filter-level "thresholds" that can filter out ngrams that are irrelevant to the final decision, and assigning each filter a set of semantic meanings (through clustering of word-level activation vectors) that shed light on the filter's purpose in the learned model. The final result is an explanation for the model itself, and explanations for each of the predictions that the model makes on given inputs. Please see the paper for details.
